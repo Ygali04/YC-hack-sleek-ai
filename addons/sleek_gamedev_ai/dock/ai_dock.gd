@@ -40,6 +40,7 @@ var current_reasoning_bubble: Control = null
 var reasoning_trace_text: String = ""
 var reasoning_update_timer: Timer
 var auto_expand_reasoning: bool = true
+var pending_attempt_group: Control = null
 
 # UI Components - Close Tab Button
 var close_tab_button: Button
@@ -526,6 +527,7 @@ func _add_welcome_message(container: VBoxContainer):
 	container.add_child(welcome_bubble)
 
 func _create_message_bubble(text: String, is_user: bool, timestamp: String) -> Control:
+	# Basic bubble used for simple system/attachment messages
 	var bubble_container = HBoxContainer.new()
 	bubble_container.custom_minimum_size.y = 60
 	
@@ -721,27 +723,17 @@ func _update_reasoning_trace():
 
 func _convert_live_to_permanent_reasoning_trace():
 	print("[AIDock] Converting live reasoning trace to permanent")
-	
-	# Only convert if we have a current reasoning bubble with content
 	if current_reasoning_bubble and not reasoning_trace_text.is_empty():
-		var current_chat = chat_tabs.get_current_tab_control()
-		if current_chat:
-			var scroll = current_chat.get_child(0) as ScrollContainer
-			var msg_container = scroll.get_child(0) as VBoxContainer
-			
-			# Find the live reasoning bubble and convert it to permanent
-			for i in range(msg_container.get_child_count()):
-				var child = msg_container.get_child(i)
-				if child.name == "typing_indicator":
-					# Replace the typing indicator with a permanent reasoning trace
-					var permanent_bubble = _create_permanent_reasoning_trace(reasoning_trace_text)
-					msg_container.add_child(permanent_bubble)
-					msg_container.move_child(permanent_bubble, i)  # Put it in the same position
-					
-					print("[AIDock] Created permanent reasoning trace with ", reasoning_trace_text.length(), " characters")
-					# Clear the reasoning trace text since we've converted it to permanent
-					reasoning_trace_text = ""
-					break
+		# Replace the live typing bubble with a permanent one in the same parent container
+		var parent := current_reasoning_bubble.get_parent()
+		if parent:
+			var idx: int = parent.get_child_index(current_reasoning_bubble)
+			var permanent_bubble = _create_permanent_reasoning_trace(reasoning_trace_text)
+			parent.add_child(permanent_bubble)
+			parent.move_child(permanent_bubble, idx)
+			reasoning_trace_text = ""
+			current_reasoning_bubble.queue_free()
+			current_reasoning_bubble = null
 
 func _on_real_reasoning_trace(trace: String):
 	print("[AIDock] Received real reasoning trace from API")
@@ -1064,6 +1056,7 @@ func _process_user_input():
 	# Clear input and attachments
 	input_field.text = ""
 	attached_files.clear()
+	# Mark the last user group as pending for this response
 	# If in Create mode and the user says to generate, we still let the model output create_image actions; otherwise normal
 	if not ai_session_manager.send_message(user_text):
 		_add_error_message_to_ui("Failed to send message. Please check your configuration.")
@@ -1074,8 +1067,12 @@ func _add_user_message_to_ui(text: String):
 		var scroll = current_chat.get_child(0) as ScrollContainer
 		var msg_container = scroll.get_child(0) as VBoxContainer
 		
-		var user_bubble = _create_message_bubble(text, true, _get_current_time())
-		msg_container.add_child(user_bubble)
+		# Create a collapsible group for this user prompt and its attempts
+		# The first attempt is created immediately; further attempts added on re-run
+		# Group structure: VBoxContainer -> user header + attempts controls + attempts stack
+		var group = _build_attempt_group(text)
+		msg_container.add_child(group)
+		pending_attempt_group = group
 		
 		# Auto-scroll to bottom
 		await get_tree().process_frame
@@ -1410,8 +1407,8 @@ func _on_assistant_message(text: String, metadata: Dictionary):
 	print("[AIDock] Assistant message received. Is reasoning model: ", is_reasoning)
 	print("[AIDock] Reasoning trace text length: ", reasoning_trace_text.length())
 	
-	# Add the AI response first
-	_add_ai_message_to_ui(text, metadata)
+	# Route the AI response into the active attempt
+	_append_assistant_to_current_attempt(text, metadata)
 	
 	# For reasoning models, the live trace should have already been converted to permanent
 	# No need to add any additional reasoning traces here
@@ -1429,10 +1426,28 @@ func _on_typing_started():
 		var current_model = ai_session_manager.get_current_model()
 		var is_reasoning = ai_session_manager.is_model_reasoning(current_model)
 		
-		var typing_bubble = _create_reasoning_indicator(is_reasoning)
-		typing_bubble.name = "typing_indicator"
-		msg_container.add_child(typing_bubble)
-		current_reasoning_bubble = typing_bubble
+		# Place live reasoning indicator into the active attempt's reasoning region
+		var target_group: VBoxContainer = pending_attempt_group
+		if target_group == null or !is_instance_valid(target_group):
+			for i in range(msg_container.get_child_count() - 1, -1, -1):
+				var child = msg_container.get_child(i)
+				if child is VBoxContainer and String(child.get_meta("type", "")) == "attempt_group":
+					target_group = child
+					break
+		if target_group:
+			var stack := target_group.get_node("attempts_stack") as VBoxContainer
+			var idx := int(target_group.get_meta("current_attempt_index"))
+			var attempt := stack.get_child(idx) as VBoxContainer
+			var reasoning_region := attempt.get_meta("reasoning_region") as VBoxContainer
+			var typing_bubble = _create_reasoning_indicator(is_reasoning)
+			typing_bubble.name = "typing_indicator"
+			reasoning_region.add_child(typing_bubble)
+			current_reasoning_bubble = typing_bubble
+		else:
+			var typing_bubble_fallback = _create_reasoning_indicator(is_reasoning)
+			typing_bubble_fallback.name = "typing_indicator"
+			msg_container.add_child(typing_bubble_fallback)
+			current_reasoning_bubble = typing_bubble_fallback
 		
 		# Start reasoning trace timer for reasoning models
 		if is_reasoning:
@@ -1693,3 +1708,165 @@ func _save_last_conversation():
 			_add_ai_message_to_ui("📝 Saved the most recent conversation locally. It will be restored on reload.")
 		else:
 			_add_error_message_to_ui("Failed to save the current conversation.")
+
+func _build_attempt_group(prompt_text: String) -> VBoxContainer:
+	var group := VBoxContainer.new()
+	group.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	group.set_meta("type", "attempt_group")
+	group.set_meta("prompt_text", prompt_text)
+	group.set_meta("attempts", [])
+	group.set_meta("current_attempt_index", 0)
+	
+	# User message bubble (right-aligned blue) spans the dock width
+	var user_bubble := _create_message_bubble(prompt_text, true, _get_current_time())
+	group.add_child(user_bubble)
+	
+	# Controls row BELOW the user message: ◀ Attempt N ▶    Re-run
+	var controls_h := HBoxContainer.new()
+	controls_h.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	controls_h.add_theme_constant_override("separation", 6)
+	group.add_child(controls_h)
+	
+	var left_btn := Button.new(); left_btn.text = "◀"; left_btn.flat = true; left_btn.custom_minimum_size = Vector2(22, 22); left_btn.tooltip_text = "Previous attempt"; controls_h.add_child(left_btn)
+	var attempt_label := Label.new(); attempt_label.text = "Attempt 1"; attempt_label.add_theme_font_size_override("font_size", 12); controls_h.add_child(attempt_label)
+	var right_btn := Button.new(); right_btn.text = "▶"; right_btn.flat = true; right_btn.custom_minimum_size = Vector2(22, 22); right_btn.tooltip_text = "Next attempt"; controls_h.add_child(right_btn)
+	var spacer := Control.new(); spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL; controls_h.add_child(spacer)
+	var rerun_btn := Button.new(); rerun_btn.text = "Re-run"; rerun_btn.flat = true; rerun_btn.custom_minimum_size = Vector2(56, 22); rerun_btn.tooltip_text = "Re-run this prompt"; controls_h.add_child(rerun_btn)
+	
+	# Attempts stack (each attempt contains reasoning region + output region)
+	var attempts_stack := VBoxContainer.new()
+	attempts_stack.name = "attempts_stack"
+	attempts_stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	group.add_child(attempts_stack)
+	
+	# Create first attempt container and mark as active
+	var first_attempt := _create_attempt_container()
+	attempts_stack.add_child(first_attempt)
+	_set_active_attempt(group, 0)
+	_update_attempt_label(group)
+	
+	# Wire up signals
+	left_btn.pressed.connect(_on_attempt_prev.bind(group))
+	right_btn.pressed.connect(_on_attempt_next.bind(group))
+	rerun_btn.pressed.connect(_on_attempt_rerun.bind(group))
+	
+	# Keep references
+	group.set_meta("left_btn", left_btn)
+	group.set_meta("right_btn", right_btn)
+	group.set_meta("attempt_label", attempt_label)
+	
+	return group
+
+func _create_attempt_container() -> VBoxContainer:
+	var attempt := VBoxContainer.new()
+	attempt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	attempt.visible = true
+	# Reasoning region (will host live/permanent reasoning trace)
+	var reason_v := VBoxContainer.new()
+	reason_v.name = "reasoning_region"
+	reason_v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	attempt.add_child(reason_v)
+	# Output region (AI messages)
+	var out_v := VBoxContainer.new()
+	out_v.name = "output_region"
+	out_v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	attempt.add_child(out_v)
+	# Keep quick refs via meta
+	attempt.set_meta("reasoning_region", reason_v)
+	attempt.set_meta("ai_container", out_v)
+	return attempt
+
+func _set_active_attempt(group: VBoxContainer, index: int) -> void:
+	var stack := group.get_node("attempts_stack") as VBoxContainer
+	for i in range(stack.get_child_count()):
+		stack.get_child(i).visible = (i == index)
+	group.set_meta("current_attempt_index", index)
+	_update_attempt_label(group)
+
+func _update_attempt_label(group: VBoxContainer) -> void:
+	var stack := group.get_node("attempts_stack") as VBoxContainer
+	var label := group.get_meta("attempt_label") as Label
+	label.text = "Attempt %d" % int(group.get_meta("current_attempt_index") + 1)
+	# Enable/disable arrows
+	var left_btn := group.get_meta("left_btn") as Button
+	var right_btn := group.get_meta("right_btn") as Button
+	left_btn.disabled = (group.get_meta("current_attempt_index") <= 0)
+	right_btn.disabled = (group.get_meta("current_attempt_index") >= stack.get_child_count() - 1)
+
+func _on_attempt_prev(group: VBoxContainer) -> void:
+	var idx := int(group.get_meta("current_attempt_index"))
+	if idx > 0:
+		_set_active_attempt(group, idx - 1)
+
+func _on_attempt_next(group: VBoxContainer) -> void:
+	var stack := group.get_node("attempts_stack") as VBoxContainer
+	var idx := int(group.get_meta("current_attempt_index"))
+	if idx < stack.get_child_count() - 1:
+		_set_active_attempt(group, idx + 1)
+
+func _on_attempt_rerun(group: VBoxContainer) -> void:
+	# Add a new attempt container and make it active; then resend prompt
+	var stack := group.get_node("attempts_stack") as VBoxContainer
+	var new_attempt := _create_attempt_container()
+	stack.add_child(new_attempt)
+	_set_active_attempt(group, stack.get_child_count() - 1)
+	pending_attempt_group = group
+	# Re-send the original prompt text without adding another user bubble
+	var original_text := String(group.get_meta("prompt_text"))
+	_resend_prompt(original_text)
+
+func _resend_prompt(original_text: String) -> void:
+	var text := original_text
+	if Engine.is_editor_hint():
+		var ei = Engine.get_singleton("EditorInterface")
+		text = tagger.apply_tags(text, ei)
+	# Build full prompt with preamble and custom instructions (mirrors _process_user_input)
+	var preamble = "First, write a concise explanation (2-4 sentences). Then output a [gds_actions]...[/gds_actions] block with one command per line using ONLY these verbs and exact signatures:\n- create_file(\"res://path\") + a fenced code block with '# New file: res://path' and file contents\n- create_scene(\"res://path.tscn\", \"RootName\", \"RootType\")\n- create_node(\"Name\", \"NodeType\", \"res://scene.tscn\", \"ParentPath\", { property: value })\n- edit_node(\"NodeName\", \"res://scene.tscn\", { property: value })\n- add_subresource(\"NodeName\", \"res://scene.tscn\", \"SubResType\", { property: value })\n- edit_subresource(\"NodeName\", \"res://scene.tscn\", \"SubResPropName\", { property: value })\n- assign_script(\"NodeName\", \"res://scene.tscn\", \"res://script.gd\")\n- edit_script(\"res://script.gd\") with the updated content included in a fenced code block\n- create_image({ prompt: string, aspect_ratio: string (e.g. '1:1'), seed: int, output_format: string ('png' or 'jpeg'), output_prefix: string, exact_output_path: string (e.g. 'res://art/generated/<prefix>_<seed>.<ext>') })  // SD-3.5-Flash only\n- spritesheet_to_spriteframes(\"NodePath\", \"res://scene.tscn\", { texture: \"res://path.png\", rows: int, cols: int, frame_width: int, frame_height: int, animations: [ { name: string, start: int, length: int, speed: float, loop: bool } ], assign_to_property: \"sprite_frames\" })\nDo NOT invent other verbs (e.g. edit_project_settings). Close the actions with [/gds_actions].\n\n"
+	var ci = ""
+	if ai_session_manager:
+		ci = ai_session_manager.get_custom_instructions()
+	if ci != "":
+		text = preamble + ci + "\n\n" + text
+	else:
+		text = preamble + text
+	# Re-send
+	if not ai_session_manager.send_message(text):
+		_add_error_message_to_ui("Failed to send message. Please check your configuration.")
+
+func _append_assistant_to_current_attempt(text: String, metadata: Dictionary) -> void:
+	# Find the most recent attempt group to attach the assistant message
+	var current_chat = chat_tabs.get_current_tab_control()
+	if current_chat == null:
+		return
+	var scroll = current_chat.get_child(0) as ScrollContainer
+	var msg_container = scroll.get_child(0) as VBoxContainer
+	
+	var target_group: VBoxContainer = pending_attempt_group
+	if target_group == null or !is_instance_valid(target_group):
+		# Fallback: scan from bottom to find last attempt_group
+		for i in range(msg_container.get_child_count() - 1, -1, -1):
+			var child = msg_container.get_child(i)
+			if child is VBoxContainer and String(child.get_meta("type", "")) == "attempt_group":
+				target_group = child
+				break
+	if target_group == null:
+		# No group found; fallback to simple AI bubble
+		_add_ai_message_to_ui(text, metadata)
+		return
+	
+	# Append bbcode AI bubble inside active attempt's ai_container
+	var stack := target_group.get_node("attempts_stack") as VBoxContainer
+	var idx := int(target_group.get_meta("current_attempt_index"))
+	var attempt := stack.get_child(idx) as VBoxContainer
+	var ai_container := attempt.get_meta("ai_container") as VBoxContainer
+	var enhanced_text := text
+	if metadata.has("usage"):
+		var usage = metadata["usage"]
+		if usage.has("total_tokens"):
+			enhanced_text += "\n\n*Tokens used: " + str(usage["total_tokens"]) + "*"
+	enhanced_text = markdown_renderer.render(enhanced_text)
+	var ai_bubble = _create_ai_bubble_bbcode(enhanced_text, _get_current_time())
+	ai_container.add_child(ai_bubble)
+	
+	await get_tree().process_frame
+	scroll.scroll_vertical = scroll.get_v_scroll_bar().max_value

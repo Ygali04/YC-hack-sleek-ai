@@ -37,6 +37,10 @@ static func _is_valid_aspect_ratio(ar: String) -> bool:
 
 static func execute(opts: Dictionary) -> bool:
 	var prompt := String(opts.get("prompt", ""))
+	# Enforce 16-bit 2D pixel spritesheet convention
+	var enforcement := "Create ONLY a 16-bit 2D pixel-art sprite sheet on a transparent background. Use a tight, uniform grid with no margins, consistent framing, and order frames left-to-right, top-to-bottom."
+	if not prompt.begins_with("[SPRITESHEET]"):
+		prompt = "[SPRITESHEET] " + enforcement + "\n" + prompt
 	var aspect_ratio := String(opts.get("aspect_ratio", "1:1"))
 	var seed := int(_parse_value(opts.get("seed", 0)))
 	var output_format := String(opts.get("output_format", "png")).to_lower()
@@ -47,8 +51,8 @@ static func execute(opts: Dictionary) -> bool:
 		push_error("create_image: missing 'prompt'")
 		return false
 	if not _is_valid_aspect_ratio(aspect_ratio):
-		push_error("create_image: unsupported aspect_ratio '%s' (try one of: 1:1, 3:2, 2:3, 4:3, 3:4, 5:4, 4:5, 16:9, 9:16, 21:9, 9:21, 7:5, 5:7)" % aspect_ratio)
-		return false
+		# Force 1:1 as safe default for spritesheets
+		aspect_ratio = "1:1"
 	if output_format != "png" and output_format != "jpeg" and output_format != "jpg":
 		push_error("create_image: unsupported output_format '%s' (use 'png' or 'jpeg')" % output_format)
 		return false

@@ -1,0 +1,43 @@
+[gd_scene load_steps=6 format=3 uid="uid://ck4e3owe4x31t"]
+
+[ext_resource type="Texture2D" uid="uid://dq8kyjyn8yj15" path="res://coin_spin_vertical.png" id="1_0u4v1"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_voqd6"]
+atlas = ExtResource("1_0u4v1")
+region = Rect2(0, 0, 341, 700)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_w1wkj"]
+atlas = ExtResource("1_0u4v1")
+region = Rect2(341, 0, 341, 700)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_gg235"]
+atlas = ExtResource("1_0u4v1")
+region = Rect2(682, 0, 341, 700)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_2rl2w"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_voqd6")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_w1wkj")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_gg235")
+}],
+"loop": true,
+"name": &"default",
+"speed": 5.0
+}]
+
+[node name="CoinSpin" type="Node2D"]
+
+[node name="Coin" type="CharacterBody2D" parent="."]
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="Coin"]
+sprite_frames = SubResource("SpriteFrames_2rl2w")
+autoplay = "default"
+frame_progress = 0.86303
+
+[node name="Camera2D" type="Camera2D" parent="."]

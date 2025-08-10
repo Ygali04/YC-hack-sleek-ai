@@ -87,6 +87,12 @@ static func apply_property_changes(node: Node, modifications: Dictionary, scene_
 	return true
 
 static func _try_set_property(node: Node, prop_name: String, value: Variant, scene_root: Node = null) -> bool:
+	# Compatibility: allow 'autoplay' shorthand for AnimatedSprite2D to mean (animation=value, playing=true)
+	if node is AnimatedSprite2D and prop_name == "autoplay":
+		var anim_name := String(value)
+		node.set("animation", anim_name)
+		node.set("playing", true)
+		return true
 	# Compatibility: Godot 4 TileMap no longer has 'cell_size'. Map to TileSet.tile_size if available, or ignore with warning.
 	if node is TileMap and prop_name == "cell_size":
 		var v2i := Vector2i.ZERO

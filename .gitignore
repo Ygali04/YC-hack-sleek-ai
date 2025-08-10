@@ -32,3 +32,9 @@ gamedev_assistant/
 *.tmp
 *.temp
 *~
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd

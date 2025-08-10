@@ -1,0 +1,61 @@
+[gd_scene load_steps=8 format=3 uid="uid://cuallopmmgjdj"]
+
+[ext_resource type="Texture2D" uid="uid://bv5v321t8ffch" path="res://cat_jump.png" id="1_t4umw"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_nt71l"]
+atlas = ExtResource("1_t4umw")
+region = Rect2(753, 615, 251, 205)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_hvuk3"]
+atlas = ExtResource("1_t4umw")
+region = Rect2(753, 0, 251, 205)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_rsc7j"]
+atlas = ExtResource("1_t4umw")
+region = Rect2(502, 0, 251, 205)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_vh81r"]
+atlas = ExtResource("1_t4umw")
+region = Rect2(502, 615, 251, 205)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_x5tqc"]
+atlas = ExtResource("1_t4umw")
+region = Rect2(0, 615, 251, 205)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_1t24c"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_nt71l")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_hvuk3")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_rsc7j")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_vh81r")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_x5tqc")
+}],
+"loop": true,
+"name": &"cat_jump",
+"speed": 5.0
+}]
+
+[node name="CatScene" type="Node2D"]
+
+[node name="Cat" type="CharacterBody2D" parent="."]
+visible = false
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="Cat"]
+position = Vector2(0, -1)
+sprite_frames = SubResource("SpriteFrames_1t24c")
+animation = &"cat_jump"
+autoplay = "cat_jump"
+frame_progress = 0.916046
+
+[node name="Camera2D" type="Camera2D" parent="."]
+zoom = Vector2(4, 4)

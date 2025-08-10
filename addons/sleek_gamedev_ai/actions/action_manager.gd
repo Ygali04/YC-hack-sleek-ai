@@ -17,6 +17,11 @@ const EditSubresource = preload("res://addons/sleek_gamedev_ai/actions/edit_subr
 const AddExistingScene = preload("res://addons/sleek_gamedev_ai/actions/add_existing_scene_action.gd")
 const CreateImage = preload("res://addons/sleek_gamedev_ai/actions/create_image_action.gd")
 const SpriteSheetToFrames = preload("res://addons/sleek_gamedev_ai/actions/spritesheet_to_spriteframes_action.gd")
+const GrepAction = preload("res://addons/sleek_gamedev_ai/actions/grep_action.gd")
+const ReadFileAction = preload("res://addons/sleek_gamedev_ai/actions/read_file_action.gd")
+const SetMainScene = preload("res://addons/sleek_gamedev_ai/actions/set_main_scene_action.gd")
+const RunProject = preload("res://addons/sleek_gamedev_ai/actions/run_project_action.gd")
+const GetFSMarkdown = preload("res://addons/sleek_gamedev_ai/actions/get_fs_markdown_action.gd")
 
 var actions_buttons: Array = []
 var actions_vbox: VBoxContainer
@@ -71,7 +76,7 @@ func parse_actions_from_text(full_text: String, message_id: int) -> Array:
 	return out
 
 func _parse_action_line(line: String, full_text: String) -> Dictionary:
-	var handlers = [CreateFile, CreateScene, CreateNode, EditNode, AddSubresource, AssignScript, EditScript, EditSubresource, CreateImage, SpriteSheetToFrames]
+	var handlers = [CreateFile, CreateScene, CreateNode, EditNode, AddSubresource, AssignScript, EditScript, EditSubresource, CreateImage, SpriteSheetToFrames, GrepAction, ReadFileAction, SetMainScene, RunProject, GetFSMarkdown]
 	for h in handlers:
 		var d = h.parse_line(line, full_text)
 		if not d.is_empty():
@@ -127,6 +132,16 @@ func _label_for_action(a: Dictionary) -> String:
 			return "Generate Image"
 		"spritesheet_to_spriteframes":
 			return "Spritesheet → SpriteFrames"
+		"grep":
+			return "Grep"
+		"read_file":
+			return "Read File"
+		"set_main_scene":
+			return "Set Main Scene"
+		"run_project":
+			return "Run Project"
+		"get_fs_markdown":
+			return "Get FS Markdown"
 		_:
 			return a.get("type", "Action")
 
@@ -156,9 +171,19 @@ func _tooltip_for_action(a: Dictionary) -> String:
 		"edit_script":
 			lines.append("Edit script")
 		"create_image":
-			lines.append("Generate image using Stability AI")
+			lines.append("Generate image using OpenAI Images (gpt-image-1)")
 		"spritesheet_to_spriteframes":
 			lines.append("Build SpriteFrames from spritesheet and assign to node")
+		"grep":
+			lines.append("Search files by regex/text; prints matches with line numbers")
+		"read_file":
+			lines.append("Read file content or a line range; prints to console")
+		"set_main_scene":
+			lines.append("Set the main scene path for the project")
+		"run_project":
+			lines.append("Run the current project in Godot")
+		"get_fs_markdown":
+			lines.append("Print a markdown tree of the filesystem")
 		_:
 			pass
 	return "\n".join(lines)
@@ -178,25 +203,33 @@ func _execute_button(btn: Button) -> void:
 		"create_file":
 			ok = CreateFile.execute(a.get("path", ""), a.get("content", ""))
 		"create_scene":
-			ok = CreateScene.execute(a.get("path", ""), a.get("root_name", ""), a.get("root_type", ""))
+			ok = CreateScene.execute(a.get("path", ""), a.get("root_name", ""), a.get("root_type", "Node2D"))
 		"create_node":
-			ok = CreateNode.execute(a.get("name", ""), a.get("node_type", ""), a.get("scene_path", ""), a.get("parent_path", ""), a.get("modifications", {}))
+			ok = CreateNode.execute(a.get("name", ""), a.get("node_type", "Node"), a.get("scene_path", ""), a.get("parent_path", ""), a.get("properties", {}))
 		"edit_node":
 			ok = EditNode.execute(a.get("node_name", ""), a.get("scene_path", ""), a.get("modifications", {}))
 		"add_subresource":
 			ok = AddSubresource.execute(a.get("node_name", ""), a.get("scene_path", ""), a.get("subresource_type", ""), a.get("properties", {}))
-		"edit_subresource":
-			ok = EditSubresource.execute(a.get("node_name", ""), a.get("scene_path", ""), a.get("subresource_property_name", ""), a.get("properties", {}))
 		"assign_script":
 			ok = AssignScript.execute(a.get("node_name", ""), a.get("scene_path", ""), a.get("script_path", ""))
-		"add_existing_scene":
-			ok = AddExistingScene.execute(a.get("node_name", ""), a.get("existing_scene_path", ""), a.get("target_scene_path", ""), a.get("parent_path", ""), a.get("modifications", {}))
 		"edit_script":
 			ok = await EditScript.execute(a)
+		"edit_subresource":
+			ok = EditSubresource.execute(a.get("node_name", ""), a.get("scene_path", ""), a.get("subresource_property_name", ""), a.get("properties", {}))
 		"create_image":
 			ok = await CreateImage.execute(a.get("options", {}))
 		"spritesheet_to_spriteframes":
 			ok = SpriteSheetToFrames.execute(a.get("node_name", ""), a.get("scene_path", ""), a.get("options", {}))
+		"grep":
+			ok = GrepAction.execute(a.get("options", {}))
+		"read_file":
+			ok = ReadFileAction.execute(a.get("options", {}))
+		"set_main_scene":
+			ok = SetMainScene.execute(a.get("path", ""))
+		"run_project":
+			RunProject.execute(); ok = true
+		"get_fs_markdown":
+			ok = GetFSMarkdown.execute(a.get("options", {}))
 		_:
 			push_warning("Unrecognized action type: %s" % t)
 	action_completed.emit(t, String(a.get("path", a.get("scene_path", ""))), ok, btn)
@@ -207,9 +240,13 @@ func _execute_button(btn: Button) -> void:
 		# Emit concise, human-friendly error summary for the chat UI
 		match t:
 			"create_image":
-				action_error_bbcode.emit("[color=red]❌ create_image failed[/color] — check aspect_ratio, output_format, API key, or network. See console for details.")
+				action_error_bbcode.emit("[color=red]❌ create_image failed[/color] — check API key or network. See console for details.")
 			"spritesheet_to_spriteframes":
 				action_error_bbcode.emit("[color=red]❌ spritesheet_to_spriteframes failed[/color] — missing node, bad texture path, or invalid animations. See console for details.")
+			"grep":
+				action_error_bbcode.emit("[color=red]❌ grep failed[/color] — invalid regex or path.")
+			"read_file":
+				action_error_bbcode.emit("[color=red]❌ read_file failed[/color] — missing or unreadable path.")
 			_:
 				action_error_bbcode.emit("[color=red]❌ %s failed[/color]. See console for details." % t)
 	btn.set_meta("completed", true)

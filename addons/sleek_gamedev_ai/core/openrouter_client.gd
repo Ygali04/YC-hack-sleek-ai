@@ -77,6 +77,14 @@ func chat_completion(model: String, messages: Array, options: Dictionary = {}) -
 	if options.has("stream"):
 		body["stream"] = options["stream"]
 	
+	# If targeting gpt-image-1, prepend a strict instruction to only output 16-bit 2D pixel spritesheets
+	if typeof(model) == TYPE_STRING and model.find("gpt-image-1") != -1:
+		var enforced := "SYSTEM: You must generate ONLY 16-bit, 2D pixel-art sprite sheets that follow strict sprite sheet conventions. Use a uniform grid with no margins, consistent framing, transparent background, and left-to-right, top-to-bottom frame order. No single renders or concept art; spritesheets only."
+		if body.has("messages") and body["messages"] is Array and body["messages"].size() > 0:
+			var msgs: Array = body["messages"]
+			msgs.insert(0, {"role": "system", "content": enforced})
+			body["messages"] = msgs
+
 	var json_body = JSON.stringify(body)
 	
 	var error = current_request.request(API_URL, headers, HTTPClient.METHOD_POST, json_body)

@@ -11,9 +11,14 @@ config_version=5
 [application]
 
 config/name="sleek-ai-playground"
+run/main_scene="uid://qwp6q5o8wee2"
 config/features=PackedStringArray("4.4", "Forward Plus")
 config/icon="res://icon.svg"
 
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/sleek_gamedev_ai/plugin.cfg")
+
+[rendering]
+
+textures/canvas_textures/default_texture_filter=0

@@ -9,11 +9,11 @@ signal session_switched(session: ChatSession)
 signal session_removed(session_id: String)
 signal model_changed(model: Dictionary)
 signal error_occurred(error_message: String)
- 
+
 const OpenRouterClient = preload("res://addons/sleek_gamedev_ai/core/openrouter_client.gd")
 const ModelRegistry = preload("res://addons/sleek_gamedev_ai/core/model_registry.gd")
 const ChatSession = preload("res://addons/sleek_gamedev_ai/core/chat_session.gd")
- 
+
 var openrouter_client: OpenRouterClient
 var model_registry: ModelRegistry
 var chat_sessions: Array[ChatSession] = []

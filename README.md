@@ -5,7 +5,7 @@
 Sleek AI is a **Godot 4** plugin that turns natural-language prompts into **scenes, sprites, animations, and GDScript**. It wires up a professional scene hierarchy, keeps assets organized, and stays **idempotent** (no accidental re-generation of files) so you can iterate fast without wrecking your project.
 
 * **LLMs** (code + scene logic) are accessed via **OpenRouter** (API key in a `.env` file).
-* **Image generation** (sprites, sprite sheets, tiles) is powered by **Stable Diffusion** (API key in the same `.env`).
+* **Image generation** (sprites, sprite sheets, tiles) is powered by **OpenAI gpt-image-1** (API key in the same `.env`).
 * Built for the standard Godot pipeline: **graybox → mechanics → content → polish**.
 
 ---
@@ -39,7 +39,7 @@ You can swap this blueprint for any 2D design; the **workflow** is what matters.
 
 * **Godot**: 4.1+ (4.2 recommended)
 * **OpenRouter API key** for LLMs
-* **Stable Diffusion API key** for images
+* **OpenAI API key** for images (gpt-image-1)
 * Internet access (for model calls)
 
 ---
@@ -54,11 +54,11 @@ You can swap this blueprint for any 2D design; the **workflow** is what matters.
 ```ini
 # .env (do NOT commit to source control)
 OPENROUTER_API_KEY=sk-or-xxxx
-STABLE_DIFFUSION_API_KEY=sd-xxxx
+OPENAI_API_KEY=sk-xxxx
+OPENAI_ORG_ID=org-xxxx
 
 # optional model preferences
 OPENROUTER_MODEL=anthropic/claude-3.7-sonnet-thinking
-SD_MODEL=stability/sd3-medium
 ```
 
 4. Restart Godot (so Sleek AI loads env vars).

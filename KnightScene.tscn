@@ -1,0 +1,44 @@
+[gd_scene load_steps=6 format=3 uid="uid://dly4o66bb7lbq"]
+
+[ext_resource type="Texture2D" uid="uid://dlcv3chmbfejl" path="res://knight_flame_swing.png" id="1_4u3be"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_nkcux"]
+atlas = ExtResource("1_4u3be")
+region = Rect2(170, 340, 170, 170)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_t6i3o"]
+atlas = ExtResource("1_4u3be")
+region = Rect2(340, 340, 170, 170)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_5bw2u"]
+atlas = ExtResource("1_4u3be")
+region = Rect2(510, 0, 170, 170)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_0bcxt"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_nkcux")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_t6i3o")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_5bw2u")
+}],
+"loop": true,
+"name": &"default",
+"speed": 5.0
+}]
+
+[node name="KnightScene" type="Node2D"]
+
+[node name="Knight" type="CharacterBody2D" parent="."]
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="Knight"]
+sprite_frames = SubResource("SpriteFrames_0bcxt")
+autoplay = "default"
+frame_progress = 0.828003
+
+[node name="Camera2D" type="Camera2D" parent="."]
+zoom = Vector2(5, 5)

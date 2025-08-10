@@ -13,23 +13,33 @@ static func execute(name: String, node_type: String, scene_path: String, parent_
 			return _add_to_open(name, node_type, ei.get_edited_scene_root(), parent_path, modifications)
 	return _add_to_closed(name, node_type, scene_path, parent_path, modifications)
 
+static func _find_preferred_parent(scene_root: Node, desired_parent: String, node_type: String) -> Node:
+	# If a CharacterBody2D exists, prefer it for AnimatedSprite2D
+	var char_parent: Node = scene_root.find_child("CharacterBody2D", true, true)
+	if node_type == "AnimatedSprite2D" and char_parent:
+		return char_parent
+	# Map '.' to scene root
+	if desired_parent == "." or desired_parent.is_empty():
+		return scene_root
+	# Otherwise try to find the named parent
+	var p = scene_root.find_child(desired_parent, true, true)
+	if p:
+		return p
+	# Fallbacks
+	if char_parent:
+		return char_parent
+	return scene_root
+
 static func _add_to_open(name: String, node_type: String, scene_root: Node, parent_path: String, modifications: Dictionary) -> bool:
 	if !ClassDB.class_exists(node_type):
 		push_error("create_node: class '%s' does not exist" % node_type)
 		return false
 	var node = ClassDB.instantiate(node_type)
 	node.name = name
-	var parent: Node
-	if parent_path.is_empty() or parent_path == scene_root.name:
-		parent = scene_root
-	else:
-		parent = scene_root.find_child(parent_path, true, true)
+	var parent: Node = _find_preferred_parent(scene_root, parent_path, node_type)
 	if not parent:
-		if parent_path == scene_root.name:
-			parent = scene_root
-		else:
-			push_error("create_node: parent '%s' not found in open scene" % parent_path)
-			return false
+		push_error("create_node: failed to determine parent for '%s'" % name)
+		return false
 	parent.add_child(node)
 	node.set_owner(scene_root)
 	if not modifications.is_empty():
@@ -50,17 +60,10 @@ static func _add_to_closed(name: String, node_type: String, scene_path: String, 
 		return false
 	var node = ClassDB.instantiate(node_type)
 	node.name = name
-	var parent: Node
-	if parent_path.is_empty() or parent_path == root.name:
-		parent = root
-	else:
-		parent = root.find_child(parent_path, true, true)
+	var parent: Node = _find_preferred_parent(root, parent_path, node_type)
 	if not parent:
-		if parent_path == root.name:
-			parent = root
-		else:
-			push_error("create_node: parent '%s' not found in scene '%s'" % [parent_path, scene_path])
-			return false
+		push_error("create_node: failed to determine parent for '%s' in closed scene" % name)
+		return false
 	parent.add_child(node)
 	node.set_owner(root)
 	if not modifications.is_empty():

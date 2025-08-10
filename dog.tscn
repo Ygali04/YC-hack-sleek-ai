@@ -1,0 +1,7 @@
+[gd_scene format=3 uid="uid://brqf0t75m781i"]
+
+[node name="Dog" type="CharacterBody2D"]
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+
+[node name="Camera2D" type="Camera2D" parent="."]
